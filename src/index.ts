@@ -129,7 +129,7 @@ if (cluster.isPrimary) {
           {
             nickname,
             text: messageText,
-            avatar: `https://robohash.org/${encodeURIComponent(nickname)}.png?size=50x50`,
+            avatar: 'https://placecats.com/50/50',
           },
           result.lastID,
         );
@@ -147,7 +147,7 @@ if (cluster.isPrimary) {
               socket.emit('chat message', {
                 nickname: row.nickname,
                 text: row.content,
-                avatar: `https://robohash.org/${encodeURIComponent(row.nickname)}.png?size=50x50`,
+                avatar: `https://placecats.com/50/50`,
               }, row.id);
             }
           );

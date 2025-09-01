@@ -89,8 +89,8 @@
       }
 
       .avatar {
-        width: 40px;
-        height: 40px;
+        width: 80px;
+        height: 80px;
         border-radius: 50%;
         margin-right: 10px;
       }
@@ -191,7 +191,7 @@
         const item = document.createElement('li');
         item.classList.add('message');
 
-        const avatarUrl = `https://robohash.org/${encodeURIComponent(msg.nickname)}.png?size=40x40`;
+        const avatarUrl = msg.avatar || 'https://placecats.com/50/50';
 
         item.innerHTML = `
           <img src="${avatarUrl}" alt="${msg.nickname}" class="avatar">
