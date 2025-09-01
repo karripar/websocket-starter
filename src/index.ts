@@ -1,22 +1,22 @@
 import express from 'express';
-import {Server} from 'socket.io';
-import {open} from 'sqlite';
+import { Server } from 'socket.io';
+import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
-import {join} from 'path';
-import {createServer} from 'http';
-import {availableParallelism} from 'os';
+import { join, dirname } from 'path';
+import { createServer } from 'http';
+import { availableParallelism } from 'os';
 import cluster from 'cluster';
-import {createAdapter, setupPrimary} from '@socket.io/cluster-adapter';
-import {fileURLToPath} from 'url';
+import { createAdapter, setupPrimary } from '@socket.io/cluster-adapter';
+import { fileURLToPath } from 'url';
 
-// Equivalent of __filename and __dirname in CommonJS, this was ass to figure out with typescript
+// Equivalent of __filename and __dirname in CommonJS
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = join(__filename, '..')
+const __dirname = dirname(__filename);
 
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
   for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({PORT: 3000 + i}); // Each worker gets a different port
+    cluster.fork({ PORT: 3000 + i }); // Each worker gets a different port
   }
   setupPrimary();
 } else {
@@ -26,11 +26,12 @@ if (cluster.isPrimary) {
       driver: sqlite3.Database,
     });
 
-    // Messages table now includes room
+    // Messages table now includes room + nickname
     await db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_offset TEXT UNIQUE,
+        nickname TEXT,
         content TEXT,
         room TEXT
       );
@@ -50,7 +51,7 @@ if (cluster.isPrimary) {
     });
 
     io.on('connection', async (socket) => {
-      //  Default room
+      // Default room
       socket.join('general');
       socket.data.room = 'general';
 
@@ -64,16 +65,13 @@ if (cluster.isPrimary) {
         callback?.();
       });
 
-      // When user starts typing
+      // --- Typing events
       socket.on('typing', () => {
         socket.to(socket.data.room).emit('user typing', socket.data.nickname);
       });
 
-      // When user stops typing
       socket.on('stop typing', () => {
-        socket
-          .to(socket.data.room)
-          .emit('user stop typing', socket.data.nickname);
+        socket.to(socket.data.room).emit('user stop typing', socket.data.nickname);
       });
 
       // --- Room switching
@@ -83,14 +81,17 @@ if (cluster.isPrimary) {
         socket.data.room = roomName;
         socket.emit('system message', `You joined room: ${roomName}`);
 
-        // Send past messages for the new room
         try {
           await db.each(
-            'SELECT id, content FROM messages WHERE room = ?',
+            'SELECT id, nickname, content FROM messages WHERE room = ?',
             [roomName],
             (_err, row) => {
-              socket.emit('chat message', row.content, row.id);
-            },
+              socket.emit('chat message', {
+                nickname: row.nickname,
+                text: row.content,
+                avatar: `https://robohash.org/${encodeURIComponent(row.nickname)}.png?size=50x50`,
+              }, row.id);
+            }
           );
         } catch (e) {
           console.error('Failed to send room history:', e);
@@ -104,33 +105,35 @@ if (cluster.isPrimary) {
           return;
         }
 
-        const fullMessage = `${socket.data.nickname}: ${msg}`;
+        const nickname = socket.data.nickname;
+        const messageText = msg;
 
         let result;
         try {
           result = await db.run(
-            'INSERT INTO messages (content, client_offset, room) VALUES (?, ?, ?)',
-            fullMessage,
+            'INSERT INTO messages (content, client_offset, room, nickname) VALUES (?, ?, ?, ?)',
+            messageText,
             clientOffset,
             socket.data.room,
+            nickname,
           );
         } catch (e) {
-          if (
-            e instanceof Error &&
-            'code' in e &&
-            (e as {code?: string}).code === 'SQLITE_CONSTRAINT'
-          ) {
+          if (e instanceof Error && 'code' in e && (e).code === 'SQLITE_CONSTRAINT') {
             callback?.();
           }
           return;
         }
 
-        // Emit to current room only
         io.to(socket.data.room).emit(
           'chat message',
-          fullMessage,
+          {
+            nickname,
+            text: messageText,
+            avatar: `https://robohash.org/${encodeURIComponent(nickname)}.png?size=50x50`,
+          },
           result.lastID,
         );
+
         callback?.();
       });
 
@@ -138,11 +141,15 @@ if (cluster.isPrimary) {
       if (!socket.recovered) {
         try {
           await db.each(
-            'SELECT id, content FROM messages WHERE id > ? AND room = ?',
+            'SELECT id, nickname, content FROM messages WHERE id > ? AND room = ?',
             [socket.handshake.auth.serverOffset || 0, socket.data.room],
             (_err, row) => {
-              socket.emit('chat message', row.content, row.id);
-            },
+              socket.emit('chat message', {
+                nickname: row.nickname,
+                text: row.content,
+                avatar: `https://robohash.org/${encodeURIComponent(row.nickname)}.png?size=50x50`,
+              }, row.id);
+            }
           );
         } catch (e) {
           console.error('Recovery failed:', e);

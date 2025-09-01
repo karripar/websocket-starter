@@ -51,7 +51,8 @@
         padding: 0.5rem 1rem;
       }
       #messages > li:nth-child(odd) {
-        background: #efefef;
+        background: lightgray;
+        box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
       }
       #controls {
         padding: 0.5rem;
@@ -80,6 +81,26 @@
         border: 1px solid #ccc;
         border-radius: 3px;
       }
+
+      .message {
+        display: flex;
+        align-items: flex-start;
+        margin: 8px 0;
+      }
+
+      .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 10px;
+      }
+
+      .message-content {
+        background: #f2f2f2;
+        padding: 8px 12px;
+        border-radius: 12px;
+        max-width: 70%;
+      }
     </style>
   </head>
   <body>
@@ -100,8 +121,11 @@
     <!-- Messages -->
     <ul id="messages"></ul>
 
-    <div id="typingIndicator" style="padding: 0 1rem; color: gray; font-style: italic;"></div>
-    
+    <div
+      id="typingIndicator"
+      style="padding: 0 1rem; color: gray; font-style: italic"
+    ></div>
+
     <!-- Chat input -->
     <form id="form" action="">
       <input id="input" autocomplete="off" placeholder="Type a message..." />
@@ -165,7 +189,18 @@
       // --- Receive chat messages
       socket.on('chat message', (msg, serverOffset) => {
         const item = document.createElement('li');
-        item.textContent = msg;
+        item.classList.add('message');
+
+        const avatarUrl = `https://robohash.org/${encodeURIComponent(msg.nickname)}.png?size=40x40`;
+
+        item.innerHTML = `
+          <img src="${avatarUrl}" alt="${msg.nickname}" class="avatar">
+          <div class="message-content">
+            <strong>${msg.nickname}</strong><br>
+            ${msg.text}
+          </div>
+        `;
+
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
         socket.auth.serverOffset = serverOffset;
