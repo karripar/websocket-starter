@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "start": "node src/index.js",
-        "dev": "nodemon src/index.ts",
+        "dev": "tsx src/index.ts",
         "build": "tsc",
         "lint": "eslint --fix src test",
         "test": "jest --detectOpenHandles --forceExit"
@@ -19,7 +19,8 @@
         "morgan": "^1.10.0",
         "socket.io": "^4.8.1",
         "sqlite": "^5.1.1",
-        "sqlite3": "^5.1.7"
+        "sqlite3": "^5.1.7",
+        "tsx": "^4.20.5"
     },
     "devDependencies": {
         "@eslint/js": "^9.9.0",

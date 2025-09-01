@@ -1,23 +1,23 @@
 import express from 'express';
-import { Server } from 'socket.io';
-import { open } from 'sqlite';
+import {Server} from 'socket.io';
+import {open} from 'sqlite';
 import sqlite3 from 'sqlite3';
-import { join } from 'path';
-import { createServer } from 'http';
-import { availableParallelism } from 'os';
+import {join} from 'path';
+import {createServer} from 'http';
+import {availableParallelism} from 'os';
 import cluster from 'cluster';
-import { createAdapter, setupPrimary } from '@socket.io/cluster-adapter';
-import { fileURLToPath } from 'url';
+import {createAdapter, setupPrimary} from '@socket.io/cluster-adapter';
+import {fileURLToPath} from 'url';
 import path from 'path';
 
-// Equivalent of __filename and __dirname in CommonJS
+// Equivalent of __filename and __dirname in CommonJS, this was ass to figure out with typescript
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
   for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({ PORT: 3000 + i });
+    cluster.fork({PORT: 3000 + i}); // Each worker gets a different port
   }
   setupPrimary();
 } else {
@@ -44,19 +44,37 @@ if (cluster.isPrimary) {
       adapter: createAdapter(),
     });
 
+    app.use(express.static(join(__dirname, '../public')));
+
     app.get('/', (req, res) => {
-      res.sendFile(join(__dirname, 'index.html'));
+      res.sendFile(join(__dirname, '../public/index.html'));
     });
 
     io.on('connection', async (socket) => {
-      // --- Default room
-      socket.join('lobby');
-      socket.data.room = 'lobby';
+      //  Default room
+      socket.join('general');
+      socket.data.room = 'general';
 
       // --- Nickname
       socket.on('set nickname', (nickname, callback) => {
         socket.data.nickname = nickname;
+
+        // Tell only this user their nickname
+        socket.emit('system message', `Your nickname is now: ${nickname}`);
+
         callback?.();
+      });
+
+      // When user starts typing
+      socket.on('typing', () => {
+        socket.to(socket.data.room).emit('user typing', socket.data.nickname);
+      });
+
+      // When user stops typing
+      socket.on('stop typing', () => {
+        socket
+          .to(socket.data.room)
+          .emit('user stop typing', socket.data.nickname);
       });
 
       // --- Room switching
@@ -95,13 +113,13 @@ if (cluster.isPrimary) {
             'INSERT INTO messages (content, client_offset, room) VALUES (?, ?, ?)',
             fullMessage,
             clientOffset,
-            socket.data.room
+            socket.data.room,
           );
         } catch (e) {
           if (
             e instanceof Error &&
             'code' in e &&
-            (e as { code?: string }).code === 'SQLITE_CONSTRAINT'
+            (e as {code?: string}).code === 'SQLITE_CONSTRAINT'
           ) {
             callback?.();
           }
@@ -109,7 +127,11 @@ if (cluster.isPrimary) {
         }
 
         // Emit to current room only
-        io.to(socket.data.room).emit('chat message', fullMessage, result.lastID);
+        io.to(socket.data.room).emit(
+          'chat message',
+          fullMessage,
+          result.lastID,
+        );
         callback?.();
       });
 
