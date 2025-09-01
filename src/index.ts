@@ -8,11 +8,10 @@ import {availableParallelism} from 'os';
 import cluster from 'cluster';
 import {createAdapter, setupPrimary} from '@socket.io/cluster-adapter';
 import {fileURLToPath} from 'url';
-import path from 'path';
 
 // Equivalent of __filename and __dirname in CommonJS, this was ass to figure out with typescript
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = join(__filename, '..')
 
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
