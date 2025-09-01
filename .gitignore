@@ -22,3 +22,4 @@ pids/*
 *.pid.lock
 lib-cov/*
 *.tgz
+*.db
